@@ -22,8 +22,7 @@ fn main() {
         let rank = index + 1;
         winnings += play.1 * rank as u64;
     }
-    println!("Winnings are {winnings}");
-
+    println!("Winnings are {winnings}")
 }
 
 fn parse_line(line: &str) -> (Hand, u64) {
