@@ -2,5 +2,6 @@
     "cSpell.words": [
         "rfind",
         "TJQKA"
-    ]
+    ],
+    "editor.formatOnSave": true
 }
