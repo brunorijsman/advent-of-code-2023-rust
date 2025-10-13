@@ -2,168 +2,97 @@ use std::fs::read_to_string;
 
 fn main() {
     let mut total = 0;
-    for record in read_to_string("puzzle_input").unwrap().lines() {
+    for record in read_to_string("example_input").unwrap().lines() {
         total += nr_possible_arrangements(record);
     }
     println!("Total number of possible arrangements: {}", total);
 }
 
-fn nr_possible_arrangements(record: &str) -> u32 {
+fn nr_possible_arrangements(record: &str) -> u64 {
     let (short_symbols, counts) = record.split_once(' ').unwrap();
     let short_symbols = String::from(short_symbols);
-    let symbols = format!("{}{}{}", short_symbols, short_symbols, short_symbols);
+    // let symbols = format!("{}{}{}", short_symbols, short_symbols, short_symbols);
+    let symbols = format!("{}", short_symbols);
+    let symbol_groups = symbols
+        .split('.')
+        .filter(|s| !s.is_empty())
+        .map(|s| String::from(s))
+        .collect();
     let short_counts: Vec<u32> = counts
         .split(',')
         .map(|s| s.parse::<u32>().unwrap())
         .collect();
-    let counts = [&short_counts[..], &short_counts[..], &short_counts[..]].concat();
-    let total_count = counts.iter().sum::<u32>();
+    // let counts = [&short_counts[..], &short_counts[..], &short_counts[..]].concat();
+    let counts = [&short_counts[..]].concat();
     println!(
-        "Counting arrangements for symbols: {} and counts: {:?}",
-        symbols, counts
+        "Counting arrangements for symbol groups: {:?} and counts: {:?}",
+        symbol_groups, counts
     );
-    let nr_arrangements = count_arrangements(&symbols, &counts, total_count);
+    let nr_arrangements = total_nr_assignments(&symbol_groups, &counts);
     println!("Found {} arrangements", nr_arrangements);
     nr_arrangements
 }
 
-fn count_arrangements(symbols: &String, counts: &[u32], total_count: u32) -> u32 {
-    let is_match = symbols_can_match_counts(symbols, counts, total_count);
-    if is_match == Some(false) {
+fn total_nr_assignments(symbol_groups: &Vec<String>, counts: &[u32]) -> u64 {
+    if symbol_groups.is_empty() {
+        if counts.is_empty() {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+    let first_symbol_group = symbol_groups[0].clone();
+    let rest_symbol_groups = &symbol_groups[1..].to_vec();
+    let mut total_nr_assignements = 0;
+    for split_pos in 0..counts.len() {
+        let match_counts = counts[0..split_pos].to_vec();
+        let rest_counts = counts[split_pos..].to_vec();
+        let first_nr_assignments = symbol_group_nr_assignments(&first_symbol_group, &match_counts);
+        if first_nr_assignments > 0 {
+            let rest_nr_assignments = total_nr_assignments(rest_symbol_groups, &rest_counts);
+            println!(
+                "first_nr_assignments: {}, rest_nr_assignments: {}",
+                first_nr_assignments, rest_nr_assignments
+            );
+            total_nr_assignements += first_nr_assignments * rest_nr_assignments;
+        }
+    }
+    total_nr_assignements
+}
+
+fn symbol_group_nr_assignments(symbol_group: &String, counts: &[u32]) -> u64 {
+    println!(
+        "Assignments for group {:?} counts {:?}",
+        symbol_group, counts
+    );
+    // Empty counts list => only match if symbol group is all '?'
+    if counts.is_empty() {
+        if symbol_group.chars().all(|c| c == '?') {
+            println!(
+                "- Assignments for symbol group: {} and counts: {:?} => ONE",
+                symbol_group, counts
+            );
+            return 1;
+        } else {
+            println!(
+                "- Assignments for symbol group: {} and counts: {:?} => ZERO",
+                symbol_group, counts
+            );
+            return 0;
+        }
+    }
+    // Consume the number of hashes needed to satisfy the first count in the count vector.
+    // Remember that the symbol group (by definition) consists of only '#' and '?'
+    let need_hashes: u32 = counts[0];
+    if symbol_group.len() < need_hashes as usize {
         return 0;
     }
-    let pos = symbols.find('?');
-    match pos {
-        Some(pos) => {
-            let mut symbols = symbols.clone();
-            symbols.replace_range(pos..=pos, "#");
-            let hash_arrangements = count_arrangements(&symbols, counts, total_count);
-            symbols.replace_range(pos..=pos, ".");
-            let dot_arrangements = count_arrangements(&symbols, counts, total_count);
-            hash_arrangements + dot_arrangements
-        }
-        None => match is_match {
-            Some(true) => 1,
-            Some(false) => 0,
-            None => panic!("Should not happen"),
-        },
-    }
-}
-
-fn symbols_can_match_counts(symbols: &str, counts: &[u32], total_count: u32) -> Option<bool> {
-    if !total_chars_count_can_match(symbols, total_count) {
-        return Some(false);
-    }
-    if !total_group_count_can_match(symbols, counts) {
-        return Some(false);
-    }
-    groups_can_match(symbols, counts)
-}
-
-fn total_chars_count_can_match(symbols: &str, total_count: u32) -> bool {
-    let hash_count = symbols.chars().filter(|&c| c == '#').count() as u32;
-    let question_count = symbols.chars().filter(|&c| c == '?').count() as u32;
-    let min_count = hash_count;
-    let max_count = hash_count + question_count;
-    if total_count < min_count || total_count > max_count {
-        return false;
-    }
-    true
-}
-
-fn total_group_count_can_match(symbols: &str, counts: &[u32]) -> bool {
-    let mut min_nr_groups = 0;
-    let mut max_nr_groups = 0;
-    let mut in_group = false;
-    let mut hashes_in_group = 0;
-    let mut questions_in_group = 0;
-    for c in symbols.chars() {
-        if c == '#' {
-            if in_group {
-                hashes_in_group += 1;
-            } else {
-                in_group = true;
-                hashes_in_group = 1;
-                questions_in_group = 0;
-            }
-        } else if c == '?' {
-            if in_group {
-                questions_in_group += 1;
-            } else {
-                in_group = true;
-                hashes_in_group = 0;
-                questions_in_group = 1;
-            }
-        } else if c == '.' {
-            if in_group {
-                if hashes_in_group > 0 {
-                    min_nr_groups += 1;
-                    max_nr_groups += 1;
-                }
-                max_nr_groups += (questions_in_group + 1) / 2;
-                in_group = false;
-            }
-        }
-    }
-    if in_group {
-        if in_group {
-            if hashes_in_group > 0 {
-                min_nr_groups += 1;
-                max_nr_groups += 1;
-            }
-            max_nr_groups += (questions_in_group + 1) / 2;
-        }
-    }
-    let expected_group_count = counts.len() as u32;
-    if expected_group_count < min_nr_groups || expected_group_count > max_nr_groups {
-        return false;
-    }
-    true
-}
-
-fn groups_can_match(symbols: &str, counts: &[u32]) -> Option<bool> {
-    let mut actual_counts = Vec::new();
-    let mut in_group = false;
-    let mut min_group_count = 0;
-    let mut max_group_count = 0;
-    for c in symbols.chars() {
-        if c == '#' {
-            if in_group {
-                min_group_count += 1;
-                max_group_count += 1;
-            } else {
-                in_group = true;
-                min_group_count = 1;
-                max_group_count = 1;
-            }
-        } else if c == '?' {
-            if in_group {
-                max_group_count += 1;
-            } else {
-                in_group = true;
-                min_group_count = 0;
-                max_group_count = 1;
-            }
-        } else if c == '.' {
-            if in_group {
-                actual_counts.push((min_group_count, max_group_count));
-                in_group = false;
-            }
-        }
-    }
-    if in_group {
-        actual_counts.push((min_group_count, max_group_count));
-    }
-    for ((min_count, max_count), &expected_count) in actual_counts.iter().zip(counts.iter()) {
-        if *min_count == 0 {
-            // We ran into a group with only question marks (????). We have not implemented the logic
-            // to handle this case, so we return None to indicate that we cannot determine if the
-            // symbols can match the counts.
-            return None;
-        }
-        if expected_count < *min_count || expected_count > *max_count {
-            return Some(false);
-        }
-    }
-    Some(true)
+    let rest_symbol_group = String::from(&symbol_group[need_hashes as usize..]);
+    let rest_counts = &counts[1..];
+    let nr_assignments = symbol_group_nr_assignments(&rest_symbol_group, rest_counts);
+    println!(
+        "- Assignments for symbol group: {} and counts: {:?} => {}",
+        symbol_group, counts, nr_assignments
+    );
+    nr_assignments
 }
