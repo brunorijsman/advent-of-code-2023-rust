@@ -8,9 +8,7 @@ fn main() {
     let mut reader = BufReader::new(file);
     let mut notes_sum = 0;
     while let Some(map) = read_map(&mut reader) {
-        println!("Map\n===\n{:?}\n", map);
         let notes = calculate_map_notes(&map);
-        println!("Notes for map: {}\n", notes);
         notes_sum += notes;
     }
     println!("Total notes sum: {}", notes_sum);
