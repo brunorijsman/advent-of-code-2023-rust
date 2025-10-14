@@ -13,9 +13,7 @@ enum Direction {
 
 fn main() {
     let mut map = read_map();
-    println!("\nInitial map:");
-    print_map(&map);
-    map = roll_rocks_many_cyles(map, 1_000_000_000);
+    map = roll_rocks_many_cycles(map, 1_000_000_000);
     let load = compute_load_of_map(&map);
     println!("\nLoad of map: {}", load);
 }
@@ -24,13 +22,6 @@ fn read_map() -> Map {
     let input = read_to_string("puzzle_input").unwrap();
     let map: Map = input.lines().map(|line| line.chars().collect()).collect();
     map
-}
-
-fn print_map(map: &Map) {
-    for row in map {
-        let line: String = row.iter().collect();
-        println!("{}", line);
-    }
 }
 
 fn roll_rocks_cycle(map: Map) -> Map {
@@ -172,7 +163,7 @@ fn compute_load_of_map(map: &Map) -> usize {
     load
 }
 
-fn roll_rocks_many_cyles(map: Map, nr_cycles: usize) -> Map {
+fn roll_rocks_many_cycles(map: Map, nr_cycles: usize) -> Map {
     let mut map = map.clone();
     let mut seen_maps = HashMap::<Map, Vec<usize>>::new();
     let mut cycle_nr = 0;
@@ -189,15 +180,12 @@ fn roll_rocks_many_cyles(map: Map, nr_cycles: usize) -> Map {
                 }
             }
             None => {
-                println!("Cycle {cycle_nr}: Map not seen before");
                 let seen_in_cycles = vec![cycle_nr];
                 seen_maps.insert(map.clone(), seen_in_cycles);
             }
         }
         map = roll_rocks_cycle(map);
         cycle_nr += 1;
-        println!("After cycle {cycle_nr}:");
-        print_map(&map);
     }
     map
 }
