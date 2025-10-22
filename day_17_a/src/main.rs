@@ -1,6 +1,6 @@
 // Algorithm taken from https://www.reddit.com/r/adventofcode/comments/18luw6q/2023_day_17_a_longform_tutorial_on_day_17/
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::read_to_string;
 
 type Grid = Vec<Vec<usize>>;
@@ -17,7 +17,7 @@ fn main() {
     let grid = read_grid();
 
     let mut state_queues_by_cost: HashMap<usize, Vec<State>> = HashMap::new();
-    let mut seen_cost_by_state: HashMap<State, usize> = HashMap::new();
+    let mut seen_states: HashSet<State> = HashSet::new();
 
     // We don't know which way we'll start, so try both
     // The instructions say to ignore the starting cost
@@ -30,7 +30,7 @@ fn main() {
         1,
         &grid,
         &mut state_queues_by_cost,
-        &mut seen_cost_by_state,
+        &mut seen_states,
     );
     move_and_add_state(
         0,
@@ -41,7 +41,7 @@ fn main() {
         1,
         &grid,
         &mut state_queues_by_cost,
-        &mut seen_cost_by_state,
+        &mut seen_states,
     );
 
     // Iterate till we find the exit
@@ -76,7 +76,7 @@ fn main() {
                 1,
                 &grid,
                 &mut state_queues_by_cost,
-                &mut seen_cost_by_state,
+                &mut seen_states,
             );
             move_and_add_state(
                 current_cost,
@@ -87,7 +87,7 @@ fn main() {
                 1,
                 &grid,
                 &mut state_queues_by_cost,
-                &mut seen_cost_by_state,
+                &mut seen_states,
             );
 
             // Go straight, if we haven't gone too far already
@@ -101,7 +101,7 @@ fn main() {
                     distance + 1,
                     &grid,
                     &mut state_queues_by_cost,
-                    &mut seen_cost_by_state,
+                    &mut seen_states,
                 );
             }
         }
@@ -131,7 +131,7 @@ fn move_and_add_state(
     distance: usize,
     grid: &Grid,
     state_queues_by_cost: &mut HashMap<usize, Vec<State>>,
-    seen_cost_by_state: &mut HashMap<State, usize>,
+    seen_states: &mut HashSet<State>,
 ) {
     // Update the position
     let x = x + dx;
@@ -168,7 +168,7 @@ fn move_and_add_state(
     };
 
     // Have we seen this state before?
-    if !seen_cost_by_state.contains_key(&state) {
+    if !seen_states.contains(&state) {
         // Save the state to visit later
         state_queues_by_cost
             .entry(new_cost)
@@ -176,6 +176,6 @@ fn move_and_add_state(
             .push(state);
 
         // Mark the state as seen
-        seen_cost_by_state.insert(state, new_cost);
+        seen_states.insert(state);
     }
 }
