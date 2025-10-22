@@ -8,6 +8,9 @@ type Grid = Vec<Vec<usize>>;
 struct State {
     x: isize,
     y: isize,
+    dx: isize,
+    dy: isize,
+    distance: usize,
 }
 
 fn main() {
@@ -16,11 +19,26 @@ fn main() {
     let mut state_queues_by_cost: HashMap<usize, Vec<State>> = HashMap::new();
     let mut seen_cost_by_state: HashMap<State, usize> = HashMap::new();
 
-    // Add initial state
-    add_state(
+    // We don't know which way we'll start, so try both
+    // The instructions say to ignore the starting cost
+    move_and_add_state(
         0,
         0,
         0,
+        1,
+        0,
+        1,
+        &grid,
+        &mut state_queues_by_cost,
+        &mut seen_cost_by_state,
+    );
+    move_and_add_state(
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
         &grid,
         &mut state_queues_by_cost,
         &mut seen_cost_by_state,
@@ -40,48 +58,59 @@ fn main() {
 
         // Process each state
         for state in next_states {
-            let x = state.x as isize;
-            let y = state.y as isize;
+            let State {
+                x,
+                y,
+                dx,
+                dy,
+                distance,
+            } = state;
 
-            add_state(
-                current_cost,
-                x + 1,
-                y,
-                &grid,
-                &mut state_queues_by_cost,
-                &mut seen_cost_by_state,
-            );
-            add_state(
-                current_cost,
-                x - 1,
-                y,
-                &grid,
-                &mut state_queues_by_cost,
-                &mut seen_cost_by_state,
-            );
-            add_state(
+            // Perform left and right turns
+            move_and_add_state(
                 current_cost,
                 x,
-                y + 1,
+                y,
+                dy,
+                -dx,
+                1,
                 &grid,
                 &mut state_queues_by_cost,
                 &mut seen_cost_by_state,
             );
-            add_state(
+            move_and_add_state(
                 current_cost,
                 x,
-                y - 1,
+                y,
+                -dy,
+                dx,
+                1,
                 &grid,
                 &mut state_queues_by_cost,
                 &mut seen_cost_by_state,
             );
+
+            // Go straight, if we haven't gone too far already
+            if distance < 3 {
+                move_and_add_state(
+                    current_cost,
+                    x,
+                    y,
+                    dx,
+                    dy,
+                    distance + 1,
+                    &grid,
+                    &mut state_queues_by_cost,
+                    &mut seen_cost_by_state,
+                );
+            }
         }
     }
 }
 
 fn read_grid() -> Grid {
     let mut grid = Vec::new();
-    let lines = read_to_string("example_input").unwrap();
+    let lines = read_to_string("puzzle_input").unwrap();
     for line in lines.lines() {
         let mut row = Vec::new();
         for c in line.chars() {
@@ -93,14 +122,21 @@ fn read_grid() -> Grid {
     grid
 }
 
-fn add_state(
+fn move_and_add_state(
     cost: usize,
     x: isize,
     y: isize,
+    dx: isize,
+    dy: isize,
+    distance: usize,
     grid: &Grid,
     state_queues_by_cost: &mut HashMap<usize, Vec<State>>,
     seen_cost_by_state: &mut HashMap<State, usize>,
 ) {
+    // Update the position
+    let x = x + dx;
+    let y = y + dy;
+
     // Bounds checking
     if x < 0 || y < 0 {
         return;
@@ -123,7 +159,13 @@ fn add_state(
     }
 
     // Create the state
-    let state = State { x, y };
+    let state = State {
+        x,
+        y,
+        dx,
+        dy,
+        distance,
+    };
 
     // Have we seen this state before?
     if !seen_cost_by_state.contains_key(&state) {
