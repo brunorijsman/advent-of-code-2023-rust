@@ -1,0 +1,8 @@
+[package]
+name = "day_17_a"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ansi_term = "0.12"
+priority-queue = "2.7.0"
