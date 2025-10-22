@@ -16,7 +16,7 @@ struct State {
 fn main() {
     let grid = read_grid();
 
-    let mut state_queues_by_cost: HashMap<usize, Vec<State>> = HashMap::new();
+    let mut states_by_cost: HashMap<usize, Vec<State>> = HashMap::new();
     let mut seen_states: HashSet<State> = HashSet::new();
 
     // We don't know which way we'll start, so try both
@@ -29,7 +29,7 @@ fn main() {
         0,
         1,
         &grid,
-        &mut state_queues_by_cost,
+        &mut states_by_cost,
         &mut seen_states,
     );
     move_and_add_state(
@@ -40,7 +40,7 @@ fn main() {
         1,
         1,
         &grid,
-        &mut state_queues_by_cost,
+        &mut states_by_cost,
         &mut seen_states,
     );
 
@@ -51,10 +51,10 @@ fn main() {
         // Note: this assumes all grid values are positive!
 
         // Get the lowest cost
-        let current_cost = state_queues_by_cost.keys().min().unwrap().clone();
+        let current_cost = states_by_cost.keys().min().unwrap().clone();
 
         // Get all states at that cost
-        let next_states = state_queues_by_cost.remove(&current_cost).unwrap();
+        let next_states = states_by_cost.remove(&current_cost).unwrap();
 
         // Process each state
         for state in next_states {
@@ -75,7 +75,7 @@ fn main() {
                 -dx,
                 1,
                 &grid,
-                &mut state_queues_by_cost,
+                &mut states_by_cost,
                 &mut seen_states,
             );
             move_and_add_state(
@@ -86,7 +86,7 @@ fn main() {
                 dx,
                 1,
                 &grid,
-                &mut state_queues_by_cost,
+                &mut states_by_cost,
                 &mut seen_states,
             );
 
@@ -100,7 +100,7 @@ fn main() {
                     dy,
                     distance + 1,
                     &grid,
-                    &mut state_queues_by_cost,
+                    &mut states_by_cost,
                     &mut seen_states,
                 );
             }
@@ -130,7 +130,7 @@ fn move_and_add_state(
     dy: isize,
     distance: usize,
     grid: &Grid,
-    state_queues_by_cost: &mut HashMap<usize, Vec<State>>,
+    states_by_cost: &mut HashMap<usize, Vec<State>>,
     seen_states: &mut HashSet<State>,
 ) {
     // Update the position
@@ -170,7 +170,7 @@ fn move_and_add_state(
     // Have we seen this state before?
     if !seen_states.contains(&state) {
         // Save the state to visit later
-        state_queues_by_cost
+        states_by_cost
             .entry(new_cost)
             .or_insert(Vec::new())
             .push(state);
