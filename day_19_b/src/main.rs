@@ -1,6 +1,6 @@
+use std::collections::hash_map::HashMap;
 use std::fmt;
 use std::fs::read_to_string;
-use std::collections::hash_map::HashMap;
 
 #[derive(Debug)]
 enum Comparison {
@@ -25,15 +25,16 @@ impl Action {
             Action::Workflow(s.to_string())
         }
     }
-}   
+}
 
 #[derive(Debug)]
 struct Rule {
+    #[allow(dead_code)] // rule_str is kept for debugging purposes
     rule_str: String,
     category: char,
     comparison: Comparison,
     value: usize,
-    action:Action
+    action: Action,
 }
 
 impl Rule {
@@ -52,7 +53,13 @@ impl Rule {
         let value = condition_str[2..].parse().unwrap();
         let action_str = segments[1];
         let action = Action::from_str(action_str);
-        Rule{rule_str: rule_str.to_string(), category, comparison, value, action}
+        Rule {
+            rule_str: rule_str.to_string(),
+            category,
+            comparison,
+            value,
+            action,
+        }
     }
 }
 
@@ -67,17 +74,21 @@ impl Workflow {
     fn from_string(s: &str) -> Workflow {
         let open_curly_pos = s.find('{').unwrap();
         let name = s[..open_curly_pos].to_string();
-        let inside_curly_str = &s[open_curly_pos+1..s.len()-1];
+        let inside_curly_str = &s[open_curly_pos + 1..s.len() - 1];
         let part_str_vec = inside_curly_str.split(',').collect::<Vec<&str>>();
         let default_action_str = part_str_vec.last().unwrap().trim();
         let default_action = Action::from_str(default_action_str);
-        let rule_str_vec = &part_str_vec[..part_str_vec.len()-1];
+        let rule_str_vec = &part_str_vec[..part_str_vec.len() - 1];
         let mut rules: Vec<Rule> = Vec::new();
         for rule_str in rule_str_vec {
             let rule = Rule::from_str(rule_str);
             rules.push(rule);
         }
-        Workflow {name, rules, default_action}
+        Workflow {
+            name,
+            rules,
+            default_action,
+        }
     }
 }
 
@@ -88,7 +99,10 @@ struct WorkflowSet {
 
 impl WorkflowSet {
     fn new() -> WorkflowSet {
-        WorkflowSet{workflows: Vec::new(), name_to_index: HashMap::new()}
+        WorkflowSet {
+            workflows: Vec::new(),
+            name_to_index: HashMap::new(),
+        }
     }
 
     fn add_workflow(&mut self, workflow: Workflow) {
@@ -97,49 +111,53 @@ impl WorkflowSet {
         self.workflows.push(workflow);
     }
 
-    fn match_workflow(&self, workflow_name: &String, in_partition: &Partition) -> Partition {
-        println!("match_workflow: workflow_name={}", workflow_name);
-        println!(" in_partition: {:?}", in_partition);
+    fn match_workflow(
+        &self,
+        workflow_name: &String,
+        in_partition_set: &PartitionSet,
+    ) -> PartitionSet {
         let workflow_index = self.name_to_index[workflow_name];
         let workflow = &self.workflows[workflow_index];
-        let mut workflow_match_partition = Partition::no_parts();
-        let mut rest_partition = in_partition.clone();
-        println!(" workflow_match_partition: {:?}", workflow_match_partition);
-        println!(" rest_partition: {:?}", rest_partition);
+        let mut workflow_match_partition_set = PartitionSet::no_parts();
+        let mut rest_partition_set = in_partition_set.clone();
         for rule in &workflow.rules {
-            println!(" apply rule: {}", rule.rule_str);
-            let (rule_match_partition, rule_not_match_partition) = rest_partition.split(rule);
-            println!(" rule_match_partition: {:?}", rule_match_partition);
-            println!(" rule_not_match_partition: {:?}", rule_not_match_partition);
-            rest_partition = rule_not_match_partition;
-            workflow_match_partition = self.apply_action_to_partition(&rule.action, &workflow_match_partition, &rule_match_partition,);
-            println!(" workflow_match_partition: {:?}", workflow_match_partition);
-            println!(" rest_partition: {:?}", rest_partition);
+            let (rule_match_partition_set, rule_not_match_partition_set) =
+                rest_partition_set.split(rule);
+            rest_partition_set = rule_not_match_partition_set;
+            workflow_match_partition_set = self.apply_action_to_partition_set(
+                &rule.action,
+                &workflow_match_partition_set,
+                &rule_match_partition_set,
+            );
         }
-        println!(" apply default rule: {:?}", workflow.default_action);
-        workflow_match_partition = self.apply_action_to_partition(&workflow.default_action, &workflow_match_partition, &rest_partition);
-        println!("\n workflow_match_partition: {:?}", workflow_match_partition);
-        workflow_match_partition
+        workflow_match_partition_set = self.apply_action_to_partition_set(
+            &workflow.default_action,
+            &workflow_match_partition_set,
+            &rest_partition_set,
+        );
+        workflow_match_partition_set
     }
 
-    fn apply_action_to_partition(&self, action: &Action, old_workflow_match_partition: &Partition, rule_match_partition: &Partition) -> Partition {
+    fn apply_action_to_partition_set(
+        &self,
+        action: &Action,
+        old_workflow_match_partition_set: &PartitionSet,
+        rule_match_partition_set: &PartitionSet,
+    ) -> PartitionSet {
         match action {
-            Action::Accept => {
-                old_workflow_match_partition.extend(rule_match_partition)
-            }
-            Action::Reject => {
-                old_workflow_match_partition.clone()
-            } 
+            Action::Accept => old_workflow_match_partition_set.extend(rule_match_partition_set),
+            Action::Reject => old_workflow_match_partition_set.clone(),
             Action::Workflow(next_workflow_name) => {
-                let next_workflow_match_partition = self.match_workflow(next_workflow_name, rule_match_partition);
-                old_workflow_match_partition.extend(&next_workflow_match_partition)
+                let next_workflow_match_partition_set =
+                    self.match_workflow(next_workflow_name, rule_match_partition_set);
+                old_workflow_match_partition_set.extend(&next_workflow_match_partition_set)
             }
         }
     }
 
     fn count_matching_parts(&self) -> usize {
-        let in_partition = Partition::all_parts();
-        let match_partition = self.match_workflow(&"in".to_string(), &in_partition);
+        let in_partition_set = PartitionSet::all_parts();
+        let match_partition = self.match_workflow(&"in".to_string(), &in_partition_set);
         let count = match_partition.number_of_matches();
         count
     }
@@ -167,7 +185,6 @@ impl fmt::Debug for Partition {
     }
 }
 
-
 impl Partition {
     fn no_parts() -> Partition {
         let mut category_ranges = HashMap::new();
@@ -192,8 +209,10 @@ impl Partition {
                 new_category_ranges.insert(cat, ranges.clone());
             }
         }
-        Partition { category_ranges: new_category_ranges }
-    }   
+        Partition {
+            category_ranges: new_category_ranges,
+        }
+    }
 
     fn number_of_matches(&self) -> usize {
         let mut total = 1;
@@ -203,24 +222,30 @@ impl Partition {
                 category_total += end - start + 1;
             }
             total *= category_total;
-            println!("category_total: {}", category_total);
         }
         total
     }
 
     fn split(&self, rule: &Rule) -> (Partition, Partition) {
         let mut match_partition = self.clone_except_category(rule.category);
-        let mut non_match_partition = Partition::no_parts();
         let mut non_match_partition = self.clone_except_category(rule.category);
         for range in self.category_ranges.get(&rule.category).unwrap() {
             let (match_range, non_match_range) = Partition::split_range(range, rule);
             if let Some(mr) = match_range {
-                match_partition.category_ranges.entry(rule.category).or_insert(Vec::new()).push(mr);
+                match_partition
+                    .category_ranges
+                    .entry(rule.category)
+                    .or_insert(Vec::new())
+                    .push(mr);
             }
             if let Some(nmr) = non_match_range {
-                non_match_partition.category_ranges.entry(rule.category).or_insert(Vec::new()).push(nmr);
+                non_match_partition
+                    .category_ranges
+                    .entry(rule.category)
+                    .or_insert(Vec::new())
+                    .push(nmr);
             }
-        }   
+        }
         (match_partition, non_match_partition)
     }
 
@@ -228,7 +253,7 @@ impl Partition {
         let match_range = Partition::match_sub_range(range, rule);
         let non_match_range = Partition::non_match_sub_range(range, rule);
         (match_range, non_match_range)
-    }   
+    }
 
     fn match_sub_range(range: &Range, rule: &Rule) -> Option<Range> {
         let (range_start, range_end) = range;
@@ -236,18 +261,32 @@ impl Partition {
         match rule.comparison {
             Comparison::LessThan => {
                 if *range_start < value {
-                    Some((*range_start, if *range_end < value - 1 { *range_end } else { value - 1 }))
+                    Some((
+                        *range_start,
+                        if *range_end < value - 1 {
+                            *range_end
+                        } else {
+                            value - 1
+                        },
+                    ))
                 } else {
                     None
                 }
-            },
+            }
             Comparison::GreaterThan => {
                 if *range_end > value {
-                    Some((if *range_start > value + 1 { *range_start } else { value + 1 }, *range_end))
+                    Some((
+                        if *range_start > value + 1 {
+                            *range_start
+                        } else {
+                            value + 1
+                        },
+                        *range_end,
+                    ))
                 } else {
                     None
                 }
-            },
+            }
         }
     }
 
@@ -257,41 +296,92 @@ impl Partition {
         match rule.comparison {
             Comparison::LessThan => {
                 if *range_end >= value {
-                    Some((if *range_start < value { value } else { *range_start }, *range_end))
+                    Some((
+                        if *range_start < value {
+                            value
+                        } else {
+                            *range_start
+                        },
+                        *range_end,
+                    ))
                 } else {
                     None
                 }
-            },
+            }
             Comparison::GreaterThan => {
                 if *range_start <= value {
-                    Some((*range_start, if *range_end > value { value } else { *range_end }))
+                    Some((
+                        *range_start,
+                        if *range_end > value {
+                            value
+                        } else {
+                            *range_end
+                        },
+                    ))
                 } else {
                     None
                 }
-            },
-        }
-    }
-
-    fn extend(&self, other: &Partition) -> Partition {
-       let mut new_category_ranges = self.category_ranges.clone();
-        for (&category, other_ranges) in &other.category_ranges {
-            let entry = new_category_ranges.entry(category).or_insert(Vec::new());
-            for &other_range in other_ranges {
-                entry.push(other_range);
             }
         }
-        Partition { category_ranges: new_category_ranges }
     }
 }
 
-fn main() {
-    let workflow_set = read_workflow_set();
-    let count = workflow_set.count_matching_parts();
-    println!("Number of matching parts: {}", count);
+#[derive(Clone)]
+struct PartitionSet {
+    partitions: Vec<Partition>,
+}
+
+impl fmt::Debug for PartitionSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "PartitionSet:")?;
+        for partition in &self.partitions {
+            writeln!(f, "{:?}", partition)?;
+        }
+        Ok(())
+    }
+}
+
+impl PartitionSet {
+    fn no_parts() -> PartitionSet {
+        let partition = Partition::no_parts();
+        PartitionSet {
+            partitions: vec![partition],
+        }
+    }
+
+    fn all_parts() -> PartitionSet {
+        let partition = Partition::all_parts();
+        PartitionSet {
+            partitions: vec![partition],
+        }
+    }
+
+    fn number_of_matches(&self) -> usize {
+        self.partitions.iter().map(|p| p.number_of_matches()).sum()
+    }
+
+    fn split(&self, rule: &Rule) -> (PartitionSet, PartitionSet) {
+        let mut match_partition_set = PartitionSet { partitions: vec![] };
+        let mut not_match_partition_set = PartitionSet { partitions: vec![] };
+        for partition in &self.partitions {
+            let (match_partition, not_match_partition) = partition.split(rule);
+            match_partition_set.partitions.push(match_partition);
+            not_match_partition_set.partitions.push(not_match_partition);
+        }
+        (match_partition_set, not_match_partition_set)
+    }
+
+    fn extend(&self, other: &PartitionSet) -> PartitionSet {
+        let mut new_partition_set = self.clone();
+        for partition in &other.partitions {
+            new_partition_set.partitions.push(partition.clone());
+        }
+        new_partition_set
+    }
 }
 
 fn read_workflow_set() -> WorkflowSet {
-    let lines = read_to_string("test_input").unwrap();
+    let lines = read_to_string("puzzle_input").unwrap();
     let mut workflows: WorkflowSet = WorkflowSet::new();
     for line in lines.lines() {
         if line.trim().is_empty() {
@@ -301,4 +391,10 @@ fn read_workflow_set() -> WorkflowSet {
         workflows.add_workflow(workflow);
     }
     panic!("No empty line separating workflows and parts");
+}
+
+fn main() {
+    let workflow_set = read_workflow_set();
+    let count = workflow_set.count_matching_parts();
+    println!("Number of matching parts: {}", count);
 }
