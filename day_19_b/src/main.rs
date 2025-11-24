@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs::read_to_string;
 use std::collections::hash_map::HashMap;
 
@@ -28,6 +29,7 @@ impl Action {
 
 #[derive(Debug)]
 struct Rule {
+    rule_str: String,
     category: char,
     comparison: Comparison,
     value: usize,
@@ -35,8 +37,8 @@ struct Rule {
 }
 
 impl Rule {
-    fn from_str(s: &str) -> Rule {
-        let segments = s.trim().split(':').collect::<Vec<&str>>();
+    fn from_str(rule_str: &str) -> Rule {
+        let segments = rule_str.trim().split(':').collect::<Vec<&str>>();
         assert!(segments.len() == 2);
         let condition_str = segments[0];
         let category = condition_str.chars().next().unwrap();
@@ -50,7 +52,7 @@ impl Rule {
         let value = condition_str[2..].parse().unwrap();
         let action_str = segments[1];
         let action = Action::from_str(action_str);
-        Rule{category, comparison, value, action}
+        Rule{rule_str: rule_str.to_string(), category, comparison, value, action}
     }
 }
 
@@ -96,15 +98,27 @@ impl WorkflowSet {
     }
 
     fn match_workflow(&self, workflow_name: &String, in_partition: &Partition) -> Partition {
+        println!("match_workflow: workflow_name={}", workflow_name);
+        println!(" in_partition: {:?}", in_partition);
         let workflow_index = self.name_to_index[workflow_name];
         let workflow = &self.workflows[workflow_index];
         let mut workflow_match_partition = Partition::no_parts();
         let mut rest_partition = in_partition.clone();
+        println!(" workflow_match_partition: {:?}", workflow_match_partition);
+        println!(" rest_partition: {:?}", rest_partition);
         for rule in &workflow.rules {
-            let (rule_match_partition, rest_partition) = rest_partition.split(rule);
+            println!(" apply rule: {}", rule.rule_str);
+            let (rule_match_partition, rule_not_match_partition) = rest_partition.split(rule);
+            println!(" rule_match_partition: {:?}", rule_match_partition);
+            println!(" rule_not_match_partition: {:?}", rule_not_match_partition);
+            rest_partition = rule_not_match_partition;
             workflow_match_partition = self.apply_action_to_partition(&rule.action, &workflow_match_partition, &rule_match_partition,);
+            println!(" workflow_match_partition: {:?}", workflow_match_partition);
+            println!(" rest_partition: {:?}", rest_partition);
         }
-        self.apply_action_to_partition(&workflow.default_action, &workflow_match_partition, &rest_partition);
+        println!(" apply default rule: {:?}", workflow.default_action);
+        workflow_match_partition = self.apply_action_to_partition(&workflow.default_action, &workflow_match_partition, &rest_partition);
+        println!("\n workflow_match_partition: {:?}", workflow_match_partition);
         workflow_match_partition
     }
 
@@ -133,10 +147,26 @@ impl WorkflowSet {
 
 type Range = (usize, usize);
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Partition {
     category_ranges: HashMap<char, Vec<Range>>,
 }
+
+impl fmt::Debug for Partition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Partition:")?;
+        for category in ['x', 'm', 'a', 's'] {
+            write!(f, "  {category}:")?;
+            let ranges = self.category_ranges.get(&category).unwrap();
+            for (start, end) in ranges {
+                write!(f, " {start}-{end}")?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
+
 
 impl Partition {
     fn no_parts() -> Partition {
@@ -173,12 +203,14 @@ impl Partition {
                 category_total += end - start + 1;
             }
             total *= category_total;
+            println!("category_total: {}", category_total);
         }
         total
     }
 
     fn split(&self, rule: &Rule) -> (Partition, Partition) {
         let mut match_partition = self.clone_except_category(rule.category);
+        let mut non_match_partition = Partition::no_parts();
         let mut non_match_partition = self.clone_except_category(rule.category);
         for range in self.category_ranges.get(&rule.category).unwrap() {
             let (match_range, non_match_range) = Partition::split_range(range, rule);
@@ -259,7 +291,7 @@ fn main() {
 }
 
 fn read_workflow_set() -> WorkflowSet {
-    let lines = read_to_string("example_input").unwrap();
+    let lines = read_to_string("test_input").unwrap();
     let mut workflows: WorkflowSet = WorkflowSet::new();
     for line in lines.lines() {
         if line.trim().is_empty() {
